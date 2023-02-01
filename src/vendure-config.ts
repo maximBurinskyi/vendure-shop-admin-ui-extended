@@ -10,6 +10,7 @@ import { AdminUiPlugin } from '@vendure/admin-ui-plugin';
 import 'dotenv/config';
 import path from 'path';
 import { RandomCatPlugin } from './plugins/cats/cat';
+import { compileUiExtensions } from '@vendure/ui-devkit/compiler';
 
 const IS_DEV = process.env.APP_ENV === 'dev';
 
@@ -61,7 +62,11 @@ export const config: VendureConfig = {
     },
     // When adding or altering custom field definitions, the database will
     // need to be updated. See the "Migrations" section in README.md.
-    customFields: {},
+    customFields: {
+      Product: [
+        { name: 'intensity', type: 'int', min: 0, max: 100, defaultValue: 0 },
+      ],
+    },
     plugins: [
         RandomCatPlugin,
         AssetServerPlugin.init({
@@ -90,8 +95,44 @@ export const config: VendureConfig = {
             },
         }),
         AdminUiPlugin.init({
-            route: 'admin',
+            adminUiConfig: {
+                apiPort: 3000,
+                brand: 'My Store phone',
+                hideVendureBranding: true,
+                hideVersion: true,
+              }, 
+            route: "admin",
             port: 3002,
-        }),
+            app: compileUiExtensions({
+              outputPath: path.join(__dirname, '../admin-ui'),
+              extensions: [{
+                // Points to the path containing our Angular "glue code" module
+                extensionPath: path.join(__dirname, 'ui-extension/modules'),
+                ngModules: [
+                  {
+                    // We want to lazy-load our extension...
+                    type: 'lazy',
+                    // ...when the `/admin/extensions/react-ui`
+                    // route is activated
+                    route: 'react-ui',
+                    // The filename of the extension module
+                    // relative to the `extensionPath` above
+                    ngModuleFileName: 'react-extension.module.ts',
+                    // The name of the extension module class exported
+                    // from the module file.
+                    ngModuleName: 'ReactUiExtensionModule',
+                  },
+                ],
+                staticAssets: [
+                  // This is where we tell the compiler to copy the compiled React app
+                  // artifacts over to the Admin UI's `/static` directory. In this case we
+                  // also rename "build" to "react-app". This is why the `extensionUrl`
+                  // in the module config points to './assets/react-app/index.html'.
+                  { path: path.join(__dirname, 'ui-extension/react-app/build'), rename: 'react-app' },
+                ],
+              }],
+              devMode: true,
+            }),
+          }),
     ],
 };
